@@ -17,6 +17,7 @@ Lora::Lora() : button(BOARD_BUTTON)
 void Lora::setup()
 {
   initRadio();
+  simpleLog.begin();
 }
 
 /// \brief Atualiza rotinas do rádio e do botão.
@@ -35,7 +36,7 @@ void Lora::initRadio()
   initRadioParameters();
   radio.setPacketReceivedAction(setFlag);
   radio.startReceive();
-  ESP_LOGI(APP, "SX1262 Initialized, waiting for reception");
+  ESP_LOGI(APP, "Radio Initialized, waiting for reception");
 }
 
 
@@ -53,9 +54,7 @@ void Lora::checkPackageReception()
   }
   else //Last operation was receiving, process data and transmit ID back
   {
-    processDataReceived();
-    delay(5000);  
-    // sendMessage();
+    processDataReceived();  
   }
 }
 
@@ -65,29 +64,32 @@ void Lora::sendMessage(const char *message)
 { 
   if(strlen(message) > sizeof(_package.message))
   {
-    ESP_LOGE(APP, "Mensagem muito longa, envie uma mensagem menor. %d", sizeof(_package.message));
+    ESP_LOGE(APP, "Payload too long(%d), send a tinnier message.", sizeof(_package.message));
     return;
   }
 
   strlcpy(_package.message, message, sizeof(_package.message));
   
   transmitPackage();
-
-  ESP_LOGI(APP, "Mensagem enviada: %s", _package.message);
 };
 
 /// \brief Efetua a transmissão do pacote _package.
 void Lora::transmitPackage()
 {
-  ESP_LOGI(APP, "Transmitindo, mensagem: %s, Aguarde...", _package.message);
+  ESP_LOGI(APP, "Transmitting message, please wait...", _package.message);
+  
+  int state;
 
-  int state = radio.transmit((uint8_t*)&_package, sizeof(_package));
+  state = radio.transmit((uint8_t*)&_package, sizeof(_package));
 
   if(noErrorFound(state))
   {
     _packageTransmitted = true;
+    ESP_LOGI(APP, "Message sent");
+    
+    simpleLog.addLogString("Message Sent: %s", _package.message);
+    
     radio.startReceive(); //Go back to receiving mode, later will be deep sleep
-    ESP_LOGI(APP, "Mensagem enviada, aguardando resposta");
   }
 }
 
@@ -102,11 +104,22 @@ void Lora::processDataReceived()
   {
     ESP_LOGD(APP, "Data received - Id: %d RSSI: %0.2fdBm SNR: %0.2fdB", package.id, radio.getRSSI(), radio.getSNR());
     ESP_LOGI(APP, "Message: %s", package.message);
-    Serial.printf("Data received - Id: %d RSSI: %0.2fdBm SNR: %0.2fdB", package.id, radio.getRSSI(), radio.getSNR());
+
+    simpleLog.addLogString("Data received - Id: %d RSSI: %0.2fdBm SNR: %0.2fdB; Message: %s", 
+                          package.id, radio.getRSSI(), radio.getSNR(),package.message);
+
+    if(strcmp(package.message, "pingpong") == 0)
+    {
+      delay(1000); //Wait a little before sending back
+      sendMessage("pingpong");
+    }
 
   }
   else
+  {
     ESP_LOGE(APP, "Error receiving data");
+    simpleLog.addLogString("Error on packet reception, RadioLib status code: %d", state);
+  }
 }
 
 /// @brief //Check if there is any error in the RADIOLIB state given
@@ -126,8 +139,8 @@ bool Lora::noErrorFound(int state)
 
 void Lora::initRadioParameters()
 { 
-  ESP_LOGD(APP, "Setting LoRa Parameters: Freq=%f, BW=%f, SF=%d, CR=%d, SW=%d, Preamble=%d, TxPower=%d",
-            FREQ, BW, SF, CR, SYNC_WORD, PREAMBLE, MAX_TX_POWER);
+  ESP_LOGV(APP, "Setting LoRa Parameters: Freq=%f, BW=%f, SF=%d, CR=%d, SW=%d, Preamble=%d, TxPower=%d",
+            FREQ, BANDWIDTH, SPREADING_FACTOR, CODING_RATE, SYNC_WORD, PREAMBLE_LENGTH, MAX_TX_POWER);
   // Serial.printf("Setting LoRa Parameters: Freq=%f, BW=%f, SF=%d, CR=%d, SW=%d, Preamble=%d, TxPower=%d",
             // FREQ, BW, SF, CR, SYNC_WORD, PREAMBLE, MAX_TX_POWER);
   

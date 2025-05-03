@@ -15,6 +15,8 @@
 #include <RadioLib.h> //Radio library for SX1262
 #include <HotButton.h> //HotButton library for button handling
 
+#include "simpleLog.h"
+
 #include <esp_log.h> //ESP32 logging library ESP_LOGX(LORA, "This is %s log", variable); //Where X could be: E,W,I,D,V
 
 
@@ -88,6 +90,8 @@ class Lora
 
     // Pacote(Struct) usado para transmitir/receber dados.
     lora_package_t _package;
+    bool _pingPong = false;
+    uint64_t _counter = 0;
     //METADATA
 
     // ID único do dispositivo (obtido via MAC do ESP32).
